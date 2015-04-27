@@ -1,0 +1,34 @@
+#!/usr/local/bin/php -q
+<?php
+
+// ----------------------------- Limits, includes, defines, ect ------------------------------ \\
+set_time_limit( 0 );
+ob_implicit_flush( );
+ini_set( "include_path", "/home/sorxorith/phpmudcvs/phpMUD/" );
+function __autoload( $class )
+{
+   require_once( "classes/".strtolower($class).".class" );
+}
+
+$loaded = true;
+$mud = null;
+$imc = null;
+
+while( $loaded )
+{
+   require_once( "classes/process.class" );
+   require_once( "classes/misc.class" );
+   require_once( "classes/imc_defines.inc" );
+   require_once( "classes/events.class" );
+
+   define( 'SEC_STAFF', 40 );
+   define( 'MAX_ATTEMPTS', 5 );
+
+   $imc = new IMC();
+   $mud = new Game( null, null );
+   $mud->loop();
+}
+
+$mud = NULL;
+
+?>

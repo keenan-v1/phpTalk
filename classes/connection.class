@@ -1,0 +1,210 @@
+<?php
+// -- Connection Stages -- \\
+
+define( 'C_PLY', 0 );
+define( 'C_NAME', 1 );
+define( 'C_PASS', 2 );
+define( 'C_NEWPASS', 3 );
+define( 'C_CONPASS', 4 );
+
+// The Connection Class
+// By: Xorith
+
+class Connection {
+   public $id = -1;        // Connection ID (Socket #)
+   public $player = 0;         // Character Resource
+   public $host = "";      // Hostname/IP of Descriptor
+   public $port = "";      // Local port connected on
+   public $connected = 0;  // When they connected
+   public $idle = 0;       // Idle timer
+   public $state = -1;    // Connection State
+   private $out_count = 0; // Outgoing message count
+   private $in_count = 0;  // Incoming message count
+   public $next = NULL;
+   public $prev = NULL;
+
+   public function __construct( $id = 0, $host = "", $port = "" )
+   {
+      global $mud;
+
+      $this->id = $id;
+      $this->host = $host;
+      $this->port = $port;
+      $this->state = C_NAME;
+      $this->connected = time();
+      llink( $this, $mud->first_conn, $mud->last_conn );
+      return;
+   }
+
+   public function __destruct()
+   {
+      $this->ditch_player();
+   }
+
+   public function ditch_player()
+   {
+      if( !$this->player )
+         return;
+      global $mud;
+      lunlink( $this->player, $mud->first_player, $mud->last_player );
+      $this->player = NULL;
+   }
+ 
+   public function write( $msg )
+   {
+      global $mud;
+      if( !$msg || empty( $msg ) )
+         return;
+
+      $msg = $mud->parser->color_parse( $msg );
+      $mud->socket->write( $this, $msg );
+      $this->out_count++;
+      $this->prompt = true;
+   }
+
+   public function disconnect( $quitting = false )
+   {
+      global $mud;
+
+      if( $quitting == true && $this->player )
+         mudlog( "Comm: {$this->player->name} has quit." );
+      else
+         mudlog( "Comm: Closing link to connection ID#{$this->id}" );
+
+      $this->ditch_player();
+      $mud->socket->close( $this );
+      return;
+   }
+   
+   public function get_name( $input )
+   {
+      global $mud;
+      // Lets check the name to make sure it's valid before we check for a player
+      
+      if( !ctype_alpha( $input ) )
+      {
+         $this->write( "Sorry, your name is invalid. A name can only contain"
+                      ."alphabetical characters!\n\rPlease try again: " );
+         return;
+      }
+      
+      if( strlen( $input ) < 3 || strlen( $input ) > 15 )
+      {
+         $this->write( "Sorry, your name is either too short or too long. A name has to be at "
+                      ."least 3 characters, but not exceeding 15.\n\rPlease try again: " );
+         return;
+      }
+
+            
+      $input = ucfirst( strtolower( $input ) );
+      $this->player = new Player( $this );
+      if( $mud->db->load( $this->player, "name", $input ) )
+      {
+         $this->state = C_PASS; // We're in here, so we're a returning player.
+         $this->write( "Welcome back, {$this->player->name}.\n\rPlease enter your password: " );
+         return;
+      }
+      else
+      {
+         $this->player->name = $input;
+         $this->player->security = 10;
+         $this->state = C_NEWPASS;
+         $this->write( "Starting new player... (Note: Type QUIT or CANCEL to abort)\n\r"
+                      ."Please, enter the password you wish to use: " );
+         return;
+      }
+   }
+   
+   public function get_password( $input )
+   {
+      global $mud;
+      switch( $this->state )
+      {
+         case C_PASS:
+            if( strcmp( md5( $input ), $this->player->password ) )
+            {
+               $this->invalid_pass++;
+               $this->ditch_player();
+               if( $this->invalid_pass == MAX_ATTEMPTS )
+               {
+                  $this->write( "You have exceeded the allowed attempts for login.\n\rGoodbye!\n\r" );
+                  $this->disconnect( false );
+                  break;
+               }
+               $this->write( "The passwords did not match.\n\rPlease enter your name: " );
+               $this->state = C_NAME;
+               break;
+            }
+            for( $conn = $mud->first_conn; $conn; $conn = $conn->next )
+            {
+               if( $this === $conn )
+                  continue;
+               if( $this->player != NULL && $conn->player != NULL && !strcasecmp( $this->player->name, $conn->player->name ) )
+               {
+                  $conn->player->send( "&RKicking off connection!&D" );
+                  $conn->player->quit();
+                  $mud->db->load( $this->player, "name", $this->player->name ); // Reload
+                  $this->player->send( "&CReconnecting...&D" );
+                  break;
+               }
+            }
+            $this->state = C_PLY;
+            $this->player->enter_game();
+         break;
+         case C_NEWPASS:
+            if( !strcasecmp( $input, "cancel" ) || !strcasecmp( $input, "quit" ) )
+            {
+               $this->write( "Aborting new character creation...\n\rPlease enter your name:" );
+               $this->state = C_NAME;
+               break;
+            }
+         
+            if( strlen( $input ) < 8 || strlen( $input ) > 15 )
+            {
+               $this->write( "Your password is either too short or too long.\n\r"
+                            ."A password must be between 8 and 15 characters in length.\n\rNew Password: " );
+               break;
+            }
+            $this->player->password = md5( $input );
+            $this->write( "Please confirm your password: " );
+            $this->state = C_CONPASS;
+         break;
+         case C_CONPASS:
+            if( strcmp( md5( $input ), $this->player->password ) )
+            {
+               $this->player->password = "";
+               $this->write( "Passwords do not match!\n\rNew Password: " );
+               $this->state = C_NEWPASS;
+               break;
+            }
+            $this->state = C_PLY;
+            $this->player->new_player();
+         break;
+         default:
+            mudlog( "BUG: Invalid password case for connection ID#{$this->id}!" );
+            $this->disconnect( false );
+         break;
+      }
+   }
+   
+   // This function interprets the input from a connection.
+   // This is NOT the command handler! This is the function that hands stuff
+   // TO the command handler. This will allow us to interpret things differently
+   // depending on what 'layer' we're dealing with. I.E. Account/Player/Connection.
+   public function interpret( $input )
+   {
+      // If we have a player and they're in the game, then pass off to the command
+      // handler.
+      if( $this->player && $this->state == C_PLY )
+      {
+         $this->player->command( $input );
+         return;
+      }
+      
+      // Here is where code will go when we have other states to worry about :)
+
+      return;
+   }
+   
+};
+?>

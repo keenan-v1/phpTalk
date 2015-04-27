@@ -1,0 +1,203 @@
+<?php
+
+// -- The Socket Class -- \\
+class Socket {
+   private $lqueue = 3;          // Max number that can connect at once.
+   private $maxconn = 10;        // Max connections,
+   public $port = 2000;          // Port to bind to.
+   public $addr = "127.0.0.1";   // Address to bind to.
+   private $maxread = 1024;      // Max bytes to read at once.
+   private $maxbuf = 1024;      // Max length of input buffer.
+   private $sock = NULL;         // Our listening descriptor.
+   private $users = array();   // The array of our connected sockets.
+   
+   public function __construct( $addr = "127.0.0.1", $port = 2000 )
+   {
+      $this->addr = $addr;
+      $this->port = $port;
+
+      if( false === ( $this->sock = @socket_create(AF_INET, SOCK_STREAM, 0) ) )
+      {
+         mudlog( "FATAL: Unable to create listening socket!" );
+         die( "Error creating listening socket!\n" );
+      }
+
+      socket_setopt( $this->sock, SOL_SOCKET, SO_REUSEADDR, 1 );
+      if( false === @socket_bind( $this->sock, $this->addr, $this->port ) )
+      {
+         socket_close( $this->sock );
+         mudlog( "FATAL: Could not bind to $this->addr:$this->port" );
+         die( "Could not bind to $this->addr:$this->port.\n" );
+      }
+      if( false === @socket_listen( $this->sock, $this->lqueue ) )
+      {
+         socket_close( $this->sock );
+         mudlog( "FATAL: Could not get socket to listen!" );
+         die( "Could not get socket to listen.\n" );
+      }
+      mudlog( "Socket up at $this->addr:$this->port" );
+
+      // Setup our user array
+      $this->users = array_fill( 0, $this->maxconn, NULL );
+      return;
+   }
+
+   public function close( Connection $conn )
+   {
+      socket_close( $this->users[$conn->id] );
+      $this->users[$conn->id] = NULL;
+      $this->ditch( $conn );
+   }
+
+   public function ditch( Connection $conn )
+   {
+      global $mud;
+      lunlink( $conn, $mud->first_conn, $mud->last_conn );
+   }
+   
+   public function __destruct()
+   {
+      socket_close( $this->sock );
+      for( $x = 0; $x < $this->maxconn; $x++ )
+         if( $this->users[$x] != NULL )
+         {
+            socket_close( $this->users[$x] );
+            $this->users[$x] = NULL;
+         }
+      mudlog( "Shutdown: Socket Closed." );
+      return;
+   }
+
+   public function write( Connection $conn, $msg )
+   {
+      if( !isset( $msg ) || empty( $msg ) )
+         return;
+
+      if( $conn->id < 0 )
+      {
+         mudlog( "BUG: socket::write() with id less than 0!  Msg = $msg" );
+         return;
+      }
+
+      if( $this->users[$conn->id] == null )
+      {
+         $this->ditch( $conn );
+         return;
+      }
+
+      if( false === @socket_write( $this->users[$conn->id], $msg, strlen( $msg ) ) )
+         $conn->disconnect( false );
+      return;
+   }
+
+   public function select()
+   {
+      global $mud, $imc;
+      $sfds = array_filter( $this->users );
+      $sfds[]= $this->sock;
+      $sfds[]= $imc->sock;
+
+      $rsocks = @socket_select( $sfds, $null, $null, 0, 10 );
+
+      if( in_array( $this->sock, $sfds ) )
+      {
+         for( $i = 0; $i < $this->maxconn + 1; $i++ )
+         {
+            if( $this->users[$i] == null)
+            {
+               $this->users[$i] = socket_accept( $this->sock );
+               socket_setopt( $this->users[$i], SOL_SOCKET, SO_REUSEADDR, 1 );
+               socket_getpeername( $this->users[$i], $userhost, $userport );
+               mudlog( "Comm: Incoming Connection from $userhost:$userport on socket #$i." );
+               $conn = new Connection( $i, $userhost, $userport );
+               if( $i == $this->maxconn )
+               {
+                  $this->write( $conn, "Sorry, no more open connections!" );
+                  mudlog( "Comm: Too many connectiosn, closing Socket ID#$i" );
+                  $this->close( $conn, false );
+               }
+               $conn->write( showfile( "text/greeting" ) );
+               $conn->write( "Please, enter your name: " );
+               break;
+            }
+            if( --$rsocks <= 0 )
+               continue;
+         }
+      }
+      if( in_array( $imc->sock, $sfds ) )
+         $imc->read_from = true;
+
+      $conn = $conn_next = NULL;
+      for( $conn = $mud->first_conn; $conn; $conn = $conn_next )
+      {
+         $conn_next = $conn->next;
+
+         if( $this->users[$conn->id] == NULL )
+         {
+            $this->ditch( $conn );
+            continue;
+         }
+
+         if( !in_array( $this->users[$conn->id], $sfds ) )
+            continue;
+
+         $in = "";
+         while( 1 )
+         {
+            if( false === ( $buffer = @socket_read( $this->users[$conn->id], $this->maxread, PHP_NORMAL_READ ) ) || !isset( $buffer ) )
+            {
+               $conn->disconnect( false );
+               $in = -1;
+               break;
+            }
+            if( strlen( $buffer ) > $this->maxbuf )
+            {
+               $conn->write( "Exceeded Input Limit!\n\r" );
+               $in = "";
+               break;
+            }
+            $buffer = trim( $buffer, " \n\r\t" );
+            if( empty( $buffer ) || $buffer == "" )
+               break;
+            else
+            {
+               $in .= $buffer;
+               if( strlen( $in ) > $this->maxbuf )
+               {
+                  $conn->write( "Exceeded Input Limit!" );
+                  $in = "";
+                  break;
+               }
+            }
+         }
+
+         if( $in == -1 )
+            continue;
+
+         $in = str_replace( $mud->invalid_characters, "", $in );
+         if( empty( $in ) && $conn->state == C_PLY )
+         {
+            $conn->player->prompt = true;
+            continue;
+         }
+         else
+         {
+            switch( $conn->state )
+            {
+               case C_NAME:    $conn->get_name( $in ); break;
+               case C_PASS:
+               case C_NEWPASS:
+               case C_CONPASS: $conn->get_password( $in ); break;
+               case C_PLY: $conn->interpret( $in ); break;
+               default:
+                  mudlog( "BUG: Invalid connection state for SID#{$conn->id} (State = {$conn->state})" );
+                  $conn->disconnect();
+               break;
+            }
+         }
+         if( --$rsocks <= 0 )
+            break;
+      }
+   }
+};
+?>

@@ -1,0 +1,237 @@
+<?php
+
+// With the number of "MUD" specific functions I'm writing, I might just make us a MUD class.
+function shutdown_game()
+{
+   global $mud;
+   $mud->up = false;
+   mudlog( "That's All Folks!" );
+}
+
+// Loads a file and converts it to a string.
+// Also adds \r for the sorry people who actually use Windblows Telnet 
+function showfile( $file )
+{
+   if( !isset( $file ) || empty( $file ) )
+      return "";
+
+   $lines = file( $file );
+   $string = implode( "\r", $lines );
+   return $string;
+}
+
+// Appends something to the running MUD Log
+function mudlog( $msg )
+{
+   if( !isset( $msg ) || empty( $msg ) )
+      return;
+   echo "[".date("D M j G:i:s T")."] $msg\n";
+   if( ( $fp = fopen( "./logs/".date("m-d-y").".log", 'a' ) ) )
+   {
+      fwrite( $fp, "[".date("G:i:s T")."] $msg\n" );
+      fclose( $fp );
+   }      
+}
+
+function array_insert( &$array, $item )
+{
+   for( $x = 0; $x < count( $array ); $x++ )
+      if( $array[$x] == NULL )
+      {
+         $array[$x] = $item;
+         break;
+      }
+}
+
+function send_to_all( $player, $message )
+{
+   if( !isset( $message ) || empty( $message ) )
+      return;
+
+   global $mud;
+   
+   for( $ply = $mud->first_player; $ply; $ply = $ply->next )
+   {
+      if( $ply->connection->state != C_PLY )
+         continue;
+      if( isset( $player ) && ( $ply === $player ) )
+         continue;
+         
+      $ply->send( $message );
+      $ply->need_prompt = true;
+   }
+}
+
+function get_arg( $input, &$argument )
+{
+   if( !isset( $input ) || empty( $input ) )
+      return "";
+ 
+   $args = explode( ' ', $input );
+   if( empty( $args[0] ) )
+   {
+      $argument = "";
+      unset( $args[0] );
+      return implode( ' ', $args );
+   }
+
+   if( $args[0][0] != "'" && $args[0][0] != "\"" )
+   {
+      $argument = $args[0];
+      unset( $args[0] );
+      return implode( ' ', $args );
+   }
+   else
+   {
+      $argument = ltrim( $args[0], '\'"' );
+      unset( $args[0] );
+      for( $x = 1; $x < count( $args ); $x++ )
+      {
+         $y = strlen( $args[$x] ) - 1;
+         if( $args[$x][$y] == "'" || $args[$x][$y] == "\"" )
+         {
+            $argument .= " ".rtrim( $args[$x], "'\"" );
+            unset( $args[$x] );
+            break;
+         }
+         $argument .= " ".$args[$x];
+         unset( $args[$x] );
+      }
+      return implode( ' ', $args );
+   }
+}
+
+function get_rank( Player $player )
+{
+   switch( $player->security )
+   {
+      case 50: return "Admin";
+      case 40: return "Staff";
+      default: return "Player";
+   }
+}
+
+// Function: llink( item, first, last )
+// Author: Xorith
+// Date: 02-15-04
+// Description:
+//    Add an item to a standardized linked list. Please note
+//    that it is assumed that $next and $prev are on the object!
+function llink( &$thing, &$first_thing, &$last_thing )
+{
+   if( $first_thing === null )
+   {
+      $first_thing = $thing;
+      $last_thing = $thing;
+   }
+   else
+      $last_thing->next = $thing;
+   
+   $thing->next = NULL;
+   
+   if( $thing === $first_thing )
+      $thing->prev = NULL;
+   else
+      $thing->prev = $last_thing;
+
+   $last_thing = $thing;
+}
+
+// Function: lunlink( item, first, last )
+// Author: Xorith
+// Date: 02-15-04
+// Description:
+//    Remove an item from a standardized linked list. Please note
+//    that it is assumed that $next and $prev are on the object!
+function lunlink( &$thing, &$first_thing, &$last_thing )
+{
+   if( $thing->prev === null )
+   {
+      $first_thing = $thing->next;
+      if( $first_thing )
+         $first_thing->prev = NULL;
+   }
+   else
+      $thing->prev->next = $thing->next;
+   
+   if( $thing->next === null )
+   {
+      $last_thing = $thing->prev;
+      if( $last_thing )
+         $last_thing->next = NULL;
+   }
+   else
+      $thing->next->prev = $thing->prev;
+}
+
+// Function: linsert( item, insert, first )
+// Author: Xorith
+// Date: 02-15-04
+// Description:
+//    Insert an item into a standardized linked list. Please note
+//    that it is assumed that $next and $prev are on the object!
+function linsert( &$thing, &$ins_thing, &$first_thing )
+{
+   $thing->prev = $ins_thing->prev;
+ 
+ if( $ins_thing->prev === null )
+      $first_thing = $thing;
+   else
+      $ins_thing->prev->next = $thing;
+   
+   $ins_thing->prev = $thing;
+   $thing->next = $ins_thing;
+}
+
+function get_player( $name )
+{
+   if( !isset( $name ) || empty( $name ) )
+      return false;
+
+   global $mud;
+   for( $ply = $mud->first_player; $ply; $ply = $ply->next )
+      if( !strcasecmp( $ply->name, $name ) )
+         return $ply;
+   return false;
+}
+
+function debug( $text )
+{
+   $fp = fopen( "debug.log", "a" );
+   fwrite( $fp, addcslashes( $text, "\"\n\r\\" )."\n" );
+   fclose( $fp );
+}
+
+function add_slashes( $text )
+{
+   $len = strlen( $text );
+   $retval = "";
+   for( $x = 0; $x < $len; $x++ )
+   {
+      if( $text[$x] == chr(34) || $text[$x] == chr(10) || $text[$x] == chr(13) || $text[$x] == chr(92) )
+         $retval .= chr(92);
+      $retval .= $text[$x];
+   }
+   return $retval;
+}
+
+function strip_slashes( $text )
+{
+/*   $len = strlen( $text );
+   $retval = "";
+   for( $x = 0; $x < $len; $x++ )
+   {
+      if( $text[$x] == chr(92) )
+      {
+         if( $text[$x+1] == 
+         $retval .= chr(92);
+         continue;
+      }
+      $retval .= $text[$x];
+   }
+   return $retval; */
+   return stripcslashes( $text );
+}
+
+?>
+

@@ -1,0 +1,102 @@
+<?php
+
+class Player {
+   public $id = -1;
+   public $name = "";
+   public $password = "";
+   public $security = 0;
+   public $connection = NULL;
+   public $need_prompt = false;
+   public $next = NULL;
+   public $prev = NULL;   
+
+   public function __construct( $connection )
+   {
+      global $mud;
+      $this->connection = $connection;
+      llink( $this, $mud->first_player, $mud->last_player );
+      return;
+   }
+   
+   public function __destruct()
+   {
+      if( $this->id > -1 && $this->connection->state == C_PLY )
+         $this->save();
+   }
+   
+   public function send( $msg )
+   {
+      if( $this->connection == NULL || !isset( $msg ) || empty( $msg ) )
+         return;
+      
+      $this->connection->write( "\n\r$msg" );
+      $this->need_prompt = true;
+      return;
+   }
+   
+   public function enter_game( )
+   {
+      global $mud;
+      send_to_all( $this, "&C[&wInfo&C] &c{$this->name} has entered the game.\n\r" );
+      $this->send( "Welcome to {$mud->name}\n\r" );
+      mudlog( "Comm: {$this->name} has connected." );
+      $this->need_prompt = true;
+      return;
+   }
+   
+   public function new_player( )
+   {
+      global $mud;
+      $this->security = 10;
+      send_to_all( $this, "&C[&wInfo&C] &c{$this->name} has entered the game for the first time!\n\r" );
+      mudlog( "Comm: New player {$this->name} has connected." );
+      if( $mud->db->create( $this ) == false )
+      {
+         mudlog( "BUG: Very bad error, couldn't create {$this->name} in the database!" );
+         $this->send( "Very Bad Bug: You were unable to be saved!\n\r" );
+      }
+      $this->send( showfile( "text/newplayer.txt" ) );
+      $this->need_prompt = true;
+      return;
+   }
+
+   public function quit()
+   {
+      send_to_all( $this, "&C[&wInfo&C] &c{$this->name} has quit.&D\n\r" );
+      $this->connection->disconnect( true );
+      return;
+   }
+   
+   public function save()
+   {
+      global $mud;
+
+      if( !$mud->db )
+         return;
+
+      if( $mud->db->save( $this ) == false )
+      {
+         mudlog( "BUG: Very bad error, couldn't save {$this->name} to the database!" );
+         $this->send( "Very Bad Bug: You were unable to be saved!\n\r" );
+      }
+      else
+         $this->send( "Saved." );
+      return;
+   }
+
+   public function show_prompt()
+   {
+      $this->send( "&D> " );
+   }
+   
+   public function command( $input )
+   {
+      global $mud;
+      $input = get_arg( $input, $command );
+      
+      $command = strtolower( "cmd_".$command );
+      $this->need_prompt = true;
+      $mud->commands->$command( $this, $input );
+   }
+};
+?>

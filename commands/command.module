@@ -1,0 +1,229 @@
+$cmd_who_security = 0;
+cmd_who( $player, $input )
+{
+   global $mud;
+   $count = 0;
+   $msg = "Users on the MUD:\n\r";   
+   for( $ply = $mud->first_player; $ply; $ply = $ply->next )
+      if( $ply->connection->state == C_PLY )
+      {
+         $msg .= sprintf( "&c%-10s &C%-15s&D", "[".get_rank( $ply )."]", $ply->name );
+         if( $player->security >= SEC_STAFF )
+            $msg .= " &w[Player #&c{$ply->id}&w] [Conn #&c{$ply->connection->id}&w]";
+         $msg .= "\n\r";
+         $count++;
+      }
+   $msg .= sprintf( "\n\rTotal Player%s: %d\n\r", $count == 1 ? "" : "s", $count );
+   $player->send( $msg );
+   return;
+}
+
+$cmd_chat_security = 0;
+cmd_chat( $player, $input )
+{
+   $player->send( "&CYou chat: &c{$input}&D\n\r" );
+   send_to_all( $player, "&C{$player->name} chats: &c{$input}&D\n\r" );
+   return;
+}
+
+$cmd_quit_security = 0;
+cmd_quit( $player, $input )
+{
+   $player->send( "You break from this reality.\n\r" );
+   $player->quit();
+}
+
+$cmd_help_security = 0;
+cmd_help( $player, $input )
+{
+   $player->send( showfile( "text/help.txt" ) );
+   return;
+}
+
+$cmd_security_security = 0;
+cmd_security( $player, $input )
+{
+   $input = get_arg( $input, $pname );
+   if( !isset( $input ) || !isset( $pname ) || empty( $input ) || empty( $pname ) )
+   {
+      $player->send( "Syntax: security <player> <level>\n\r" );
+      return;
+   }
+   if( false == ( $ply = get_player( $pname ) ) )
+   {
+      $player->send( "$pname is not online.\n\r" );
+      return;
+   }
+   if( $ply === $player )
+      return;
+
+   $ply->security = $input;
+   $player->send( "{$ply->name}'s security is now $input.\n\r" );
+   $ply->send( "Your security level is now $input.\n\r" );
+   $ply->save();
+}
+
+$cmd_news_security = 0;
+cmd_news( $player, $input )
+{
+   $player->send( showfile( "text/news.txt" ) );
+   return;
+}
+
+$cmd_shutdown_security = 40;
+cmd_shutdown( $player, $input )
+{
+   send_to_all( null, "&RREBOOT initiated by {$player->name}!\n\r" );
+   global $mud;
+   global $loaded;
+   $mud->up = false;
+   $loaded = false;
+   return;
+}
+
+$cmd_timer_security = 40;
+cmd_timer( $player, $input )
+{
+   global $timer;
+   $input = get_arg( $input, $loops );
+   if( !isset( $input ) || !isset( $loops ) || empty( $input ) || empty( $loops ) )
+   {
+      $player->send( "Syntax: timer <loops> [true]\n\r" );
+      return;
+   }
+   
+   if( $input == "true" )
+      $keep_looping = true;
+   else
+      $keep_looping = false;
+   $timer = new Timer( $loops, $keep_looping );
+   $player->send( "New timer initiated, $loops loops will be timed." );
+   return;
+}
+
+$cmd_imctell_security = 10;
+cmd_imctell( $player, $input )
+{
+   global $imc;
+   $input = get_arg( $input, $pname );
+   if( !isset( $input ) || !isset( $pname ) || empty( $input ) || empty( $pname ) )
+   {
+      $player->send( "Syntax: imctell <player@mud> <msg>\n\r" );
+      return;
+   }
+   $imc->send_tell( $player, $pname, $input );
+   return;
+}   
+
+$cmd_imclist_security = 10;
+cmd_imclist( $player, $input )
+{
+   global $imc;
+   $imc->show_mudlist( $player );
+   return;
+}
+
+$cmd_ilist_security = 10;
+cmd_ilist( $player, $input )
+{
+   global $imc;
+   $imc->show_chanlist( $player );
+   return;
+}
+
+$cmd_imcchanlist_security = 10;
+cmd_imcchanlist( $player, $input )
+{
+   global $imc;
+   $imc->show_chanlist( $player );
+   return;
+}
+
+$cmd_imcwho_security = 10;
+cmd_imcwho( $player, $input )
+{
+   global $imc;
+   if( !isset( $input ) || empty( $input ) )
+   {
+      $player->send( "Syntax: imcwho <mud>" );
+      return;
+   }
+   $imc->send_who( $player, $input, "who" );
+   return;
+}
+
+$cmd_imcinfo_security = 10;
+cmd_imcinfo( $player, $input )
+{
+   global $imc;
+   if( !isset( $input ) || empty( $input ) )
+   {
+      $player->send( "Syntax: imcinfo <mud>" );
+      return;
+   }
+   $imc->send_who( $player, $input, "info" );
+   return;
+}
+
+$cmd_imcfinger_security = 10;
+cmd_imcfinger( $player, $input )
+{
+   global $imc;
+   if( !isset( $input ) || empty( $input ) )
+   {
+      $player->send( "Syntax: imcfinger <player>@@<mud>" );
+      return;
+   }
+   $imc->send_who( $player, $input, "finger" );
+   return;
+}
+
+$cmd_imclocate_security = 10;
+cmd_imclocate( $player, $input )
+{
+   global $imc;
+   if( !isset( $input ) || empty( $input ) )
+   {
+      $player->send( "Syntax: imclocate <player>" );
+      return;
+   }
+   $imc->send_who( $player, $input, "whois" );
+   return;
+}
+
+$cmd_imcrefresh_security = 25;
+cmd_imcrefresh( $player, $input )
+{
+   global $imc;
+
+   $player->send( "Refreshing routing table...\n\r" );
+   $imc->refresh();
+   $player->send( "Done.\n\r" );
+   return;
+}
+
+$cmd_imcconnect_security = 25;
+cmd_imcconnect( $player, $input )
+{
+   global $imc;
+   if( $imc->status > IMC_DISCONNECTED )
+   {
+      $player->send( "Already connected to IMC!" );
+      return;
+   }
+   $player->send( "Attempting to connect to IMC...\n\r" );
+   if( $imc->connect() == false )
+      $player->send( "There was an error connecting to IMC.\n\r" );
+   else
+      $player->send( "IMC: Connected to {$imc->hubname}.\n\r" );
+   return;
+}
+
+$cmd_imcdisconnect_security = 25;
+cmd_imcdisconnect( $player, $input )
+{
+   global $imc;
+   $player->send( "Disconnecting from IMC.\n\r" );
+   $imc->disconnect();
+   return;
+}

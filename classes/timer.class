@@ -1,0 +1,61 @@
+<?php
+
+// Performance Timer
+
+class Timer{
+   private $loops;
+   private $loop;
+   private $looping;
+   private $start_time;
+   private $end_times;
+   public $expire = true;
+
+   public function __construct( $loops, $looping )
+   {
+      $this->loops = $loops;
+      $this->looping = $looping;
+      $this->loop = 0;
+      $this->end_times = array();
+   }
+
+   public function __destruct( )
+   {
+      global $mud;
+      if( $this->looping == true )
+         $mud->timer = new Timer( $this->loops, true );
+   }
+   
+   private function getusec()
+   {
+      list( $usec, $sec ) = explode( " ", microtime() );
+      return $usec;
+   }
+
+   public function stop_looping()
+   {
+      $this->looping = false;
+      return;
+   }
+   
+   public function loop( $i = 0 )
+   {
+      if( $i == 0 )
+      {
+         $this->start_time = $this->getusec();
+         return;
+      }
+      
+      $this->end_times[] = $this->getusec() - $this->start_time;
+      $this->loop++;
+      if( $this->loop == $this->loops )
+      {
+         $avg = array_sum( $this->end_times ) / count( $this->end_times );
+         sort( $this->end_times );
+         $min = $this->end_times[0];
+         $max = end( $this->end_times[0] );
+         mudlog( "Timer: {$this->loops} loops. AVG: $avg, MAX: $max, MIN: $min" );
+         $this->expire = true;
+      }
+   }
+};
+?>

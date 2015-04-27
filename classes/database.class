@@ -1,0 +1,286 @@
+<?php
+
+class Database {
+   private $host = "localhost";
+   private $port = "mysql";
+   private $user = "";
+   private $pass = "";
+   private $database = "default_db";
+   private $table_prefix = "def_";
+   private $conn = NULL;
+   private $select_count = 0;
+   private $insert_count = 0;
+   private $update_count = 0;
+   private $delete_count = 0;
+   private $misc_count = 0;
+
+   public function __construct( $dbini = "db.ini" )
+   {
+      if( !$this->configure( $dbini ) )
+      {
+         mudlog( "Database: Corrupt or Invalid DB configuration!" );
+         exit;
+      }
+      if( !( $this->conn = mysql_connect( $this->host, $this->user, $this->pass ) ) )
+      {
+         echo "Unable to connect to database!";
+         exit;
+      }
+      if( !mysql_select_db( $this->database, $this->conn ) )
+      {
+         echo "Unable to select {$this->database}!";
+         exit;
+      }
+      mudlog( "Database loaded." );
+   }
+
+   private function configure( $dbini = "db.ini" )
+   {
+      $settings = parse_ini_file( $dbini );
+      
+      if( !isset( $settings ) || empty( $settings ) )
+         return false;
+         
+      foreach( $settings as $key => $value )
+         $this->$key = $value;
+
+      return true;
+   }
+   
+   public function __destruct()
+   {
+      $total_queries = $this->select_count + $this->delete_count + $this->insert_count + $this->update_count + $this->misc_count;
+      $msg = "The database has been shutdown.\n";
+      $msg .= "Usage:\n  SELECTS: {$this->select_count}\n  DELETES: {$this->delete_count}\n";
+      $msg .= "  INSERTS: {$this->insert_count}\n  UPDATES: {$this->update_count}\n";
+      $msg .= "  MISC: {$this->misc_count}\n";
+      $msg .= "Total Queries: $total_queries\n";
+      mudlog( $msg );
+      mysql_close( $this->conn );
+      return;
+   }
+   
+   public function query( $query )
+   {
+      if( !isset( $query ) || empty( $query ) )
+         return NULL;
+
+      // For the hell of it *grins*
+      if( strpos( $query, "SELECT" ) !== false )
+         $this->select_count++;
+      else if( strpos( $query, "INSERT" ) !== false )
+         $this->insert_count++;
+      else if( strpos( $query, "UPDATE" ) !== false )
+         $this->update_count++;
+      else if( strpos( $query, "DELETE" ) !== false )
+         $this->delete_count++;
+      else
+         $this->misc_count++;
+
+      if( false === ( $result = @mysql_query( $query, $this->conn ) ) )
+      {
+         mudlog( "Database: Query '$query' FAILED! MySQL Err: ".mysql_error() );
+         return NULL;
+      }
+      return $result;
+   }
+
+   // Simple wrapping function
+   public function affected_rows()
+   {
+      return mysql_affected_rows( $this->conn );
+   }
+   
+   public function get_fields( $table )
+   {
+      if( !isset( $table ) || empty( $table ) )
+         return null;
+      $results = $this->query( "SHOW COLUMNS FROM {$this->table_prefix}$table" );
+      $fields = array();
+      while( $row = mysql_fetch_row( $results ) )
+         $fields[] = $row[0];
+      return $fields;
+   }
+
+   // This should be able to globally save an object.
+   public function save( $obj )
+   {
+      global $mud;
+      
+      if( !isset( $obj ) )
+         return false;
+
+      $classname = get_class( $obj );
+      if( !array_key_exists( $classname, $mud->table_data ) )
+         return false;
+
+      $table = $mud->table_data[$classname];
+      if( empty( $table ) )
+         return false;
+
+ 
+      $fields = $this->get_fields( $table );
+      $qry = "UPDATE {$this->table_prefix}$table SET";
+      $found_fields = false;
+
+      // No key field? No saving! How will we know who the hell you are??
+      $keyfield = $fields[0];
+      if( !isset( $obj->$keyfield ) )
+      {
+         mudlog( "DEBUG: '$keyfield' not set on {$obj->name}!" );
+         return false;
+      }
+
+      // We start at 1 because the first field should always be the key
+      $save_data = "";
+      for( $x = 1; $x < count( $fields ); $x++ )
+      {
+         if( isset( $obj->$fields[$x] ) )
+         {
+            if( !empty( $save_data ) )
+               $save_data .= ",";
+            if( is_int( $obj->$fields[$x] ) )
+               $save_data .= " $fields[$x]={$obj->$fields[$x]}";
+            else
+               $save_data .= " $fields[$x]='{$obj->$fields[$x]}'";
+            $found_fields = true;
+         }
+      }
+      if( !$found_fields )
+         return false;
+      $qry .= $save_data." WHERE $keyfield={$obj->$keyfield}";
+      $this->query( $qry );
+      return true;
+   }
+
+   // This should be able to globally create a new object in the database.
+   public function create( &$obj )
+   {
+      global $mud;
+      if( !isset( $obj ) )
+         return false;
+
+      $classname = get_class( $obj );   
+      if( !array_key_exists( $classname, $mud->table_data ) )
+         return false;
+
+      $table = $mud->table_data[$classname];         
+      if( empty( $table ) )
+         return false;
+         
+      $fields = $this->get_fields( $table );
+      $qry = "INSERT INTO {$this->table_prefix}$table ";
+      $found_fields = false;
+
+      // No key field? No saving! How will we know who the hell you are??
+      $keyfield = $fields[0];
+      if( !isset( $obj->$keyfield ) )
+         return false;
+     
+      $field_names = "";
+      $values = "";
+      // We start at 1 because the first field should always be the key
+      for( $x = 1; $x < count( $fields ); $x++ )
+      {
+         if( isset( $obj->$fields[$x] ) )
+         {
+            if( !empty( $field_names ) )
+               $field_names .= ",";
+            $field_names .= $fields[$x];
+            if( !empty( $values ) )
+               $values .= ",";
+            if( is_int( $obj->$fields[$x] ) )
+               $values .= $obj->$fields[$x];
+            else
+               $values .= "'".$obj->$fields[$x]."'";
+            $found_fields = true;
+         }
+      }
+      if( !$found_fields )
+         return false;
+      
+      $qry .= " ($field_names) VALUES ($values)";
+      $this->query( $qry );
+      if( $this->affected_rows() < 1 )
+         return false;
+      else
+      {
+         return true;
+         $obj->$keyfield = mysql_insert_id();
+      }
+   }
+
+   // This should be able to globally load an object.
+   public function load( &$obj, $key_name, $key_value )
+   {
+      global $mud;
+      if( !isset( $key_value ) || empty( $key_value ) || !isset( $key_name ) || empty( $key_name ) )
+         return false;
+
+      $classname = get_class( $obj );      
+      if( !array_key_exists( $classname, $mud->table_data ) )
+         return false;
+
+      $table = $mud->table_data[$classname];         
+      if( empty( $table ) )
+         return false;
+
+      $qry = "SELECT * FROM {$this->table_prefix}$table WHERE ";
+      if( is_int( $key_value ) )
+         $qry .= "$key_name=$key_value";
+      else
+         $qry .= "$key_name='$key_value'";
+      $result = $this->query( $qry );
+
+      if( mysql_num_rows( $result ) < 1 )
+         return false;
+
+      // Null object means we're 'just looking'
+      if( !$obj )
+         return true;
+         
+      $data = mysql_fetch_assoc( $result );
+
+      foreach( $data as $key => $value )
+         $obj->$key = $value;
+      
+      return true;
+   }
+   
+   // Returns the next unused key number for a numeric key.
+   // There has *got* to be a better way of doing this.
+   public function next_key( $obj, $key_name )
+   {
+      global $mud;
+      if( !isset( $obj ) )
+         return -1;
+         
+      if( !in_array( ( $classname = get_class( $obj ) ), $mud->table_data ) )
+         return -1;
+         
+      $table = $mud->table_data[$classname];         
+      if( empty( $table ) )
+         return -1;
+      
+      $result = $this->query( "SELECT $key_name FROM {$this->table_prefix}$table" );
+      $count = mysql_num_rows( $result );
+      $found_gap = false;
+      
+      for( $x = 0; $x < $count + 1; $x++ )
+      {
+         $data = mysql_fetch_assoc( $result );
+         // If $x is less than, we can be sure that we've found a gap.
+         if( $x < $data[$key_name] )
+         {
+            $found_gap = true;
+            break;
+         }
+      }
+      if( !$found_gap )
+         return $x + 1;
+      else
+         return $x;
+   }
+   
+};
+?>

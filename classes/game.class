@@ -1,0 +1,170 @@
+<?php
+
+class Game{
+   public $name = "the Kenetix Chatroom";
+   public $up = true;
+   public $now_time = 0;
+   public $seconds = 0;
+   public $timer = null;
+   public $table_data = array( "Player" => "players" );
+   public $invalid_characters = array();
+   public $acceptable_characters = array();
+   public $cleaner = null;
+   public $commands = null;
+   public $parser = null;
+   public $db = null;
+   public $sock = null;
+   public $first_player = null;
+   public $last_player = null;
+   public $first_conn = null;
+   public $last_conn = null;
+   public $reload = false;
+   public $event_handler = null;
+   
+   public function __construct( $sockets, $connections )
+   {
+      $this->up = true;
+      $this->start_time = time();
+      $this->synchtime();
+      $this->set_invalid_chars();
+      $this->cleaner = new Cleaner();
+      $this->commands = new Commands( "commands/command.module" );
+      $this->db = new database( "config/db.ini" );
+      $this->socket = new Socket( "0.0.0.0", 2000 );
+      if( isset( $sockets ) && isset( $connections ) )
+      {
+         $this->socket->users = $sockets;
+         for( $x = 0; $x < count( $connections ); $x++ )
+         {
+            llink( $connections[$x], $this->first_conn, $this->last_conn );
+            if( $connections[$x]->player != NULL )
+               llink( $connections[$x]->player, $this->first_player, $this->last_player );
+         }
+      }
+      $this->parser = new color_parse();
+      $this->event_handler = new EventHandler();
+   }
+   
+   public function loop()
+   {
+      global $imc;
+      while( $this->up )
+      {
+         if( $this->timer )
+            $this->timer->loop( 0 );
+         $this->socket->select();
+         $imc->select();
+         $this->show_prompts();
+         $this->event_handler->pulse();
+         $this->synchtime();
+         if( $this->timer )
+         {
+            $this->timer->loop( 1 );
+            if( $this->timer->expire )
+               $this->timer = NULL;
+         }
+      }
+   }
+   
+   // Setup our invalid character table
+   private function set_invalid_chars( )
+   {
+      for( $x = 0; $x < 32; $x++ )
+      {
+         if( in_array( $x, $this->acceptable_characters ) )
+            continue;
+         $this->invalid_characters[] = chr($x);
+      }
+
+      $this->invalid_characters[] = chr(127);
+   }
+
+   // Sends a prompt
+   // Rewritten and probably will need another.. -- Xorith
+   // Sure as shit. Even before initial testing too. -- Xorith (The very next day)
+   // And the Geek came back, the very next day.. (and rewrote it a AGAIN...)
+   private function show_prompts()
+   {
+      for( $ply = $this->first_player; $ply; $ply = $ply->next )
+         if( $ply->need_prompt == true )
+         {
+            $ply->show_prompt();
+            $ply->need_prompt = false;
+         }
+      return;
+   }
+
+   // Keeps our time in check
+   private function synchtime( )
+   {
+      $this->now_time = time();
+      $this->seconds = time() - $this->start_time;
+   }
+   
+   public function __destruct()
+   {
+      global $mud;
+      
+      $connections = array();
+      $sockets = array();
+      
+      mudlog( "De-activating cleaner..." );
+      $this->cleaner->cleaning = false;
+
+      if( $this->reload === true )
+      {
+         mudlog( "Storing connections for reload..." );
+         $conn = $conn_next = NULL;
+         for( $conn = $this->first_conn; $conn; $conn = $conn_next )
+         {
+            $conn_next = $conn->next;
+            $conn->write( "\n\r&RThe MUD is reloading...\n\r" );
+            if( $conn->player != NULL )
+               $conn->player->save();
+            $connections[] = $conn;
+         }
+      }
+      else
+      {
+         mudlog( "Kicking all connections..." );
+         $conn = $conn_next = NULL;
+         for( $conn = $this->first_conn; $conn; $conn = $conn_next )
+         {
+            $conn_next = $conn->next;
+            $conn->write( "\n\r&RThe MUD is going down!\n\r" );
+            if( $conn->player )
+               $conn->ditch_player();
+            $conn->disconnect( false );
+         }
+      }
+      
+      mudlog( "Unloading command module." );
+      $this->commands = NULL;
+   
+      mudlog( "Unloading color parser." );
+      $this->parser = NULL;
+   
+      if( $this->reload === true )
+      {
+         mudlog( "Prepairing socket for reload..." );
+         $sockets = $this->socket->users;
+         $this->socket = NULL;
+      }
+      else
+      {
+         mudlog( "Closing down main socket." );
+         $this->socket = NULL;
+      }
+   
+      mudlog( "Cleaning up database." );
+      $this->db = NULL;
+   
+      if( $this->reload === true )
+      {
+         mudlog( "Reloading MUD..." );
+         $mud = new Game( $sockets, $connections );
+      }
+      return;
+   }
+};
+?>

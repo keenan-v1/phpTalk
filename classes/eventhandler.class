@@ -1,0 +1,31 @@
+<?php
+// This handles our events
+
+class EventHandler {
+   public $events = array();
+   
+   public function pulse()
+   {
+      foreach ( $this->events as $event )
+      {
+         if( ( time() - $event->last ) >= $event->secs )
+            $event->run();
+      }
+   }
+
+   public function add( &$event )
+   {
+      $this->events[] = $event;
+   }
+
+   public function remove( $func )
+   {
+      for( $x = 0; $x < count( $this->events ); $x++ )
+      {
+         if( strcasecmp( $this->events[$x]->func, $func  ) )
+            $this->events[$x] = null;
+      }
+      array_filter( $this->events );
+   }
+         
+};

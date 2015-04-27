@@ -1,0 +1,29 @@
+<?php
+
+// This is an event.
+
+class Event {
+   public $func = "";
+   public $last = 0;
+   public $secs = 0;
+
+   public function __construct( $funct = "", $sec = 0 )
+   {
+      if( empty( $funct ) || $sec < 1 )
+      {
+         mudlog( "BUG: New Event has an empty function or less than 1 second iteration!" );
+         return;
+      }
+      $this->func = $funct;
+      $this->secs = $sec;
+      $this->last = time();
+      mudlog( "DEBUG: Adding event: {$this->func}, {$this->secs}, {$this->last}" );
+   }
+
+   public function run()
+   {
+      $funct = $this->func;
+      $funct();
+      $this->last = time();
+   }
+};

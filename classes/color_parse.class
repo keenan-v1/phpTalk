@@ -1,0 +1,81 @@
+<?php
+
+class color_parse{
+
+   private $color_codes = array( "&x", "&r", "&g", "&O", "&b", "&p", "&c", "&w",
+                                 "&X", "&R", "&G", "&Y", "&B", "&P", "&C", "&W", "&D",
+                                 "}x", "}r", "}g", "}O", "}b", "}p", "}c", "}w",
+                                 "}X", "}R", "}G", "}Y", "}B", "}P", "}C", "}W",
+                                 "{r", "{g", "{o", "{b", "{p", "{c", "{w",
+                                 "^B", "^I", "^U", "^R", "^S", "^b" );
+
+   private $escape_codes1 = array( "&&x", "&&r", "&&g", "&&O", "&&b", "&&p", "&&c", "&&w",
+                                   "&&X", "&&R", "&&G", "&&Y", "&&B", "&&P", "&&C", "&&W", "&&D",
+                                   "}}x", "}}r", "}}g", "}}O", "}}b", "}}p", "}}c", "}}w",
+                                   "}}X", "}}R", "}}G", "}}Y", "}}B", "}}P", "}}C", "}}W",
+                                   "{{r", "{{g", "{{o", "{{b", "{{p", "{{c", "{{w",
+                                   "^^B", "^^I", "^^U", "^^R", "^^S", "^^b");
+
+   private $escape_codes2 = array( "&!x", "&!r", "&!g", "&!O", "&!b", "&!p", "&!c", "&!w",
+                                   "&!X", "&!R", "&!G", "&!Y", "&!B", "&!P", "&!C", "&!W", "&!D",
+                                   "}!x", "}!r", "}!g", "}!O", "}!b", "}!p", "}!c", "}!w",
+                                   "}!X", "}!R", "}!G", "}!Y", "}!B", "}!P", "}!C", "}!W",
+                                   "{!r", "{!g", "{!o", "{!b", "{!p", "{!c", "{!w",
+                                   "^!B", "^!I", "^!U", "^!R", "^!S", "^!b" );
+
+   private $ansi_colors = array( "\033[0;30m", "\033[0;31m", "\033[0;32m", "\033[0;33m", "\033[0;34m",
+                                 "\033[0;35m", "\033[0;36m", "\033[0;37m", "\033[1;30m", "\033[1;31m",
+                                 "\033[1;32m", "\033[1;33m", "\033[1;34m", "\033[1;35m", "\033[1;36m",
+                                 "\033[1;37m", "\033[0m", "\033[0;5;30m", "\033[0;5;31m", "\033[0;5;32m",
+                                 "\033[0;5;33m", "\033[0;5;34m", "\033[0;5;35m", "\033[0;5;36m", "\033[0;5;37m",
+                                 "\033[1;5;30m", "\033[1;5;31m", "\033[1;5;32m", "\033[1;5;33m", "\033[1;5;34m",
+                                 "\033[1;5;35m", "\033[1;5;36m", "\033[1;5;37m", "\033[41m", "\033[42m",
+                                 "\033[43m", "\033[44m", "\033[45m", "\033[46m", "\033[47m", "\033[1m",
+                                 "\033[3m", "\033[4m", "\033[5m", "\033[7m", "\033[9m" );
+
+   public function __construct( )
+   {
+      // Setup extended ASCII tables
+      // I know. I'm cheap. :) Just tacking the codes onto the other tables.
+      mudlog( "Populating tables for extended ASCII codes..." );
+      for( $x = 128; $x < 255; $x++ )
+      {
+         $this->color_codes[] = "&$x";
+         $this->escape_codes[] = "&&$x";
+         $this->escape2_codes[] = "&!$x";
+         $this->ansi_colors[] = chr($x);
+      }
+      mudlog( "Color/ASCII parser loaded and ready." );
+   }
+
+   // Function: string color_parse( string text )
+   // Author: Xorith
+   // Date: 02-15-04
+   // Description:
+   //    Parses the color codes in $msg. Uses replace_color() to perform actual replacement.
+   public function color_parse( $msg )
+   {
+
+      if( !isset( $msg ) || empty( $msg ) )
+         return "";
+
+      $msg .= "&D";
+      $msg = str_replace( $this->escape_codes1, $this->escape_codes2, $msg ); // Make escaping safe
+      $msg = str_replace( $this->color_codes, $this->ansi_colors, $msg ); // Replace the colors
+      $msg = str_replace( $this->escape_codes2, $this->color_codes, $msg ); // Now back to the code.
+      return $msg;
+   }
+   public function __destruct( )
+   {
+      mudlog( "Color parser unloading..." );
+   }
+};
+
+class bareBones{
+
+   public function color_parse( $msg )
+   {
+      return $msg;
+   }
+};
+?>

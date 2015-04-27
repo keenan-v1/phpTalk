@@ -1,0 +1,16 @@
+<?php
+
+// Waiting on this til we get some of the other classes designed.
+
+class worldObject {
+   public $reference = 0;
+   
+   public __construct()
+   {
+      global $next_reference;
+      global $worldObjects;
+      
+      $this->reference = $next_reference;
+      $wordObjects
+      $next_reference++;
+   }

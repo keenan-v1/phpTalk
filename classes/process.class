@@ -1,0 +1,103 @@
+<?php
+
+// Process Control Code
+
+declare(ticks=1);
+// Catch all signals so we can clean up right
+pcntl_signal( SIG_IGN, 'sig_handler' );
+//pcntl_signal( SIG_DFL, 'sig_handler' );
+//pcntl_signal( SIG_ERR, 'sig_handler' );
+pcntl_signal( SIGHUP, 'sig_handler' );
+pcntl_signal( SIGINT, 'sig_handler' );
+pcntl_signal( SIGQUIT, 'sig_handler' );
+pcntl_signal( SIGILL, 'sig_handler' );
+pcntl_signal( SIGTRAP, 'sig_handler' );
+pcntl_signal( SIGABRT, 'sig_handler' );
+pcntl_signal( SIGIOT, 'sig_handler' );
+pcntl_signal( SIGBUS, 'sig_handler' );
+pcntl_signal( SIGFPE, 'sig_handler' );
+//pcntl_signal( SIGKILL, 'sig_handler' );
+pcntl_signal( SIGUSR1, 'sig_handler' );
+pcntl_signal( SIGSEGV, 'sig_handler' );
+pcntl_signal( SIGUSR2, 'sig_handler' );
+pcntl_signal( SIGPIPE, 'sig_handler' );
+pcntl_signal( SIGALRM, 'sig_handler' );
+pcntl_signal( SIGTERM, 'sig_handler' );
+pcntl_signal( SIGSTKFLT, 'sig_handler' );
+pcntl_signal( SIGCLD, 'sig_handler' );
+pcntl_signal( SIGCHLD, 'sig_handler' );
+pcntl_signal( SIGCONT, 'sig_handler' );
+//pcntl_signal( SIGSTOP, 'sig_handler' );
+pcntl_signal( SIGTSTP, 'sig_handler' );
+pcntl_signal( SIGTTIN, 'sig_handler' );
+pcntl_signal( SIGTTOU, 'sig_handler' );
+pcntl_signal( SIGURG, 'sig_handler' );
+pcntl_signal( SIGXCPU, 'sig_handler' );
+pcntl_signal( SIGXFSZ, 'sig_handler' );
+pcntl_signal( SIGVTALRM, 'sig_handler' );
+pcntl_signal( SIGPROF, 'sig_handler' );
+pcntl_signal( SIGWINCH, 'sig_handler' );
+pcntl_signal( SIGPOLL, 'sig_handler' );
+pcntl_signal( SIGIO, 'sig_handler' );
+pcntl_signal( SIGPWR, 'sig_handler' );
+pcntl_signal( SIGSYS, 'sig_handler' );
+pcntl_signal( SIGBABY, 'sig_handler' );
+
+
+proc_nice( 19 );
+
+function sig_handler( $signo )
+{
+   switch( $signo )
+   {
+//      case SIG_IGN:
+//      case SIG_DFL:
+      case SIGHUP:
+      case SIGILL:
+      case SIGTRAP:
+      case SIGABRT:
+      case SIGIOT:
+      case SIGBUS:
+      case SIGFPE:
+      case SIGUSR1:
+      case SIGUSR2:
+      case SIGPIPE:
+      case SIGALRM:
+      case SIGSTKFLT:
+      case SIGCLD:
+      case SIGCHLD:
+      case SIGCONT:
+//      case SIGSTOP:
+      case SIGTSTP:
+      case SIGTTIN:
+      case SIGTTOU:
+      case SIGURG:
+      case SIGXCPU:
+      case SIGXFSZ:
+      case SIGVTALRM:
+      case SIGPROF:
+      case SIGWINCH:
+      case SIGPOLL:
+      case SIGIO:
+      case SIGPWR:
+      case SIGSYS:
+      case SIGBABY:
+         mudlog( "Caught unhandled signal: $signo" );
+      break;
+      case SIGINT:
+      case SIGQUIT:
+      case SIGTERM:
+//      case SIGKILL:
+      case SIG_ERR:
+         shutdown_game();
+         exit;
+      break;
+      case SIGSEGV:
+         mudlog( "Caught SegFault, trying a clean shutdown!" );
+         shutdown_game();
+         exit;
+      break;
+   }
+}
+
+?>

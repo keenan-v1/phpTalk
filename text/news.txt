@@ -1,0 +1,19 @@
+&R::NEWS::&D
+&C5-28-04
+&c
+It's been a while, but I got some stuff done here. I added an event system.
+This means IMC should reconnect on it's own after being remotely disconnected.
+It won't reconnect if the 'imcdisconnect' command is issued!
+
+I also reworked the display of imclist. It should look better now.
+
+&C3-24-04
+&c
+Welcome Kenetix users! What once was phpMUD has now been turned into
+the Kenetix Chatroom. Feel free to ask your questions. This MUD also
+serves as a portal to the MudDomain IMC2 Network.
+
+&C3-1-04
+&c
+IMC2 support has been refined. Please see HELP for commands!
+&D

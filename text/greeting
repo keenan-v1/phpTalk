@@ -1,0 +1,12 @@
+Welcome to Kenetix!
+
+Kenetix runs MUD for PHP v1.2, which is (c)2004 by Xorith
+
+This port is designed to give clients hosted on Kenetix
+and others a chance to communicate.
+
+Note: If you're a new player, simply enter the name
+      you wish to use.
+
+MOTD: New news as of 5-28-04!
+(** Be sure to type NEWS and HELP in game! **)

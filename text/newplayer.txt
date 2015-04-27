@@ -1,0 +1,13 @@
+           &C[ &WWelcome New Player &C]&D
+
+&wA few things you should know in regard to this MUD:&D
+
+   &Y-&R*&Y- &cThis is a test project.
+   &Y-&R*&Y- &cThings may not work.
+   &Y-&R*&Y- &cIt may as well suck.
+   &Y-&R*&Y- &cThere is }RNO&D&c bitching allowed.
+   &Y-&R*&Y- &cStay tuned for more...&D
+
+&DYou enter a world that is devoid of everything...
+
+

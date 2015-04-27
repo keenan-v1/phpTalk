@@ -1,0 +1,189 @@
+<?php
+
+// Built-in support for loading variables, but not needed ATM.
+class Commands {
+   private $funcs = array();
+   private $vars = array();
+   
+   public function __call( $func, $args )
+   {
+      global $imc;
+      if( !array_key_exists( $func, $this->funcs ) )
+      {
+         if( $imc->channel_hook( substr( $func, 4, strlen($func) ), $args[0], $args[1] ) == false )
+             $args[0]->send( "Command not recognized.\n\r" );
+         else
+             return;
+      }
+      else
+      {
+         $arrkey = $func."_security";
+         $cmdsec = 0;
+         if( array_key_exists( $arrkey, $this->vars ) )
+            $cmdsec = $this->vars[$arrkey];
+         
+         if( $args[0]->security < $cmdsec )
+            $args[0]->send( "Command not recognized.\n\r" );
+         else
+            $this->funcs[$func]( $args[0], $args[1] );
+      }
+   }
+
+   public function __construct( $file )
+   {
+      $this->load( $file );
+   }
+   
+   public function cmd_reload( $player, $input = "" )
+   {
+      if( $player->security < 50 )
+      {
+         $player->send( "Command not recognized.\n\r" );
+         return;
+      }
+
+      if( empty( $input ) )
+      {
+         $player->send( "Invalid syntax! You must specify a module to load!" );
+         return;
+      }
+      send_to_all( null, "Command reload initiated by {$player->name}.\n\r" );
+      $this->funcs = array();
+      $this->vars = array();
+      if( $this->load( $input ) === false )
+      {
+         send_to_all( null, "Command reload &RFAILED!&D\n\r" );
+         send_to_all( null, "Shutting down...\n\r" );
+         global $mud;
+         $mud->mud_up = false;
+         $mud->reload = true;
+         return;
+      }
+      send_to_all( null, "Command reload complete.\n\r" );
+      return;
+   }
+
+   private function load( $file )
+   {
+      if( empty( $file ) )
+      {
+         mudlog( "ERR: Commands::load was given an invalid file!" );
+         return false;
+      }
+      
+      if( false === ( $data = @file( $file ) ) )
+      {
+         mudlog( "ERR: Commands::load can't find the file!" );
+         return false;
+      }
+
+      mudlog( "Commands: Loading module file '$file'..." );
+      $this->load_file( $file );
+      mudlog( "Commands: Loaded ".count($this->funcs)." functions and ".count($this->vars)." variables from '$file'." );
+      return true;
+   }
+
+   // This is the magic function.
+   private function load_file( $file = "" )
+   {
+      if( empty( $file ) )
+      {
+         mudlog( "ERR: Commands::load was given an invalid file!" );
+         return;
+      }
+      
+      if( false === ( $data = @file( $file ) ) )
+      {
+         mudlog( "ERR: Commands::load can't find the file!" );
+         return;
+      }
+   
+      $code = "";
+      $funcname = "";
+      $args = "";
+      $in_code = false;
+      foreach( $data as $line )
+      {
+         if( !$line )
+            continue;
+         if( $line[0] == '$' )
+         {
+            $in_val = false;
+            $var = $val = "";
+            for( $x = 1; $x < strlen( $line ); $x++ )
+            {
+               if( !$in_val )
+               {
+                  if( $line[$x] == ' ' )
+                  {
+                     $in_val = true;
+                     continue;
+                  }
+                  $var .= $line[$x];
+                  continue;
+               }
+               if( empty( $val ) && $line[$x] == ' ' || $line[$x] == '=' )
+                  continue;
+               if( $line[$x] == ';' )
+               {
+                  $this->vars[$var] = $val;
+                  $var = "";
+                  $val = "";
+                  $in_val = false;
+                  break;
+               }
+               $val .= $line[$x];
+            }
+            continue;
+         }
+         if( $line[0] == '{' )
+         {
+            $in_code = true;
+            continue;
+         }
+         if( $line[0] == '}' )
+         {
+            $in_code = false;
+            $this->funcs[$funcname] = create_function( $args, $code );
+            $funcname = "";
+            $code = "";
+            $args = "";
+            continue;
+         }
+
+         if( !$in_code )
+         {
+            $line = trim( $line );
+            $in_args = false;
+            for( $x = 0; $x < strlen( $line ); $x++ )
+            {
+               if( $line[$x] == '(' )
+               {
+                  $in_args = true;
+                  $i = 0;
+                  continue;
+               }
+               else if( $line[$x] == ')' )
+               {
+                  $in_args = false;
+                  break;
+               }
+               if( $in_args )
+               {
+                  if( $line[$x] != " " )
+                     $args .= $line[$x];
+                  continue;
+               }
+               else
+               {
+                  $funcname .= $line[$x];
+               }
+            }
+         }
+         else
+            $code .= $line;
+      }
+   }
+
+};
+?>

@@ -1,0 +1,20 @@
+<?php
+
+class Cleaner {
+   public $cleaning = true;
+
+   public function __construct()
+   {
+      mudlog( "Cleaner is online." );
+   }
+
+   public function __destruct()
+   {
+      if( $this->cleaning != true )
+         return;
+      
+      mudlog( "Cleaner caught irregular shutdown... cleaning!" );
+      shutdown_game();
+      return;
+   }
+};

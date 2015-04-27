@@ -1,0 +1,26 @@
+
+ &GCurrent Commands:
+   &cquit           &wQuits
+   &chelp           &wShows you this
+   &cwho            &wLists who's all connected
+   &cchat <msg>     &wChats <msg>
+
+ &GIMC2 Commands:
+   &cimcchanlist                &wLists the channels available on IMC2
+   &cilist                      &wAlias for imcchanlist
+   &cimclist                    &wLists all MUDs on IMC2
+   &cimcwho <mud>               &wReturns that MUD's who list.
+   &cimcfinger <player@mud>     &wReturns information about a player.
+   &cimcinfo <mud>              &wReturns information about a MUD.
+   &cimclocate <player>         &wSends a locate request for a player.
+   &cimctell <player@mud> <msg> &wSends a personal message to the player.
+   &c<local chan name> <msg>    &wSends a message to that channel. (See IMCCHANLIST)
+   
+   &RAdmin Only:
+   &cimcconnect                 &wConnects the MUD to the IMC2 Network.
+   &cimcdisconnect              &wDisconnects the MUD from IMC2.
+   &cimcrefresh                 &wCompletely refreshes the local routing table.
+
+   &OIf you &YSTILL&O need help, then there's truely
+   &Ono help for you.
+
